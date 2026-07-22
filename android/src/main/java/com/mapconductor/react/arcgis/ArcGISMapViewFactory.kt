@@ -113,6 +113,7 @@ suspend fun createArcGISMapViewController(
         }
 
     val markerLayer: GraphicsOverlay = GraphicsOverlay().apply { renderingMode = GraphicsRenderingMode.Dynamic }
+    holder.geoView.graphicsOverlays.add(markerLayer)
     val markerController = getArcGISMarkerController(holder, markerLayer, markerTiling)
     val polylineController = getArcGISPolylineController(holder)
     val rasterLayerController = getArcGISRasterLayerController(holder)
@@ -136,8 +137,6 @@ suspend fun createArcGISMapViewController(
         registry.put(
             MarkerRenderingSupportKey,
             object : MarkerRenderingSupport<ArcGISActualMarker> {
-                override val mapLoadedState = mapController.mapLoadedState
-
                 override fun createMarkerRenderer(
                     strategy: MarkerRenderingStrategyInterface<ArcGISActualMarker>,
                 ): MarkerOverlayRendererInterface<ArcGISActualMarker> = mapController.createMarkerRenderer()
