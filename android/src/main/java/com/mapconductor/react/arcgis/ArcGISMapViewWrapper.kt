@@ -30,6 +30,9 @@ import com.mapconductor.compose.polygon.LocalPolygonCollector
 import com.mapconductor.compose.polyline.LocalPolylineCollector
 import com.mapconductor.compose.raster.LocalRasterLayerCollector
 import com.mapconductor.core.ResourceProvider
+import com.mapconductor.react.wrapper.MapViewWrapperEventEmitter
+import com.mapconductor.react.wrapper.MapViewWrapperScreenPositions
+import com.mapconductor.react.wrapper.WrapperInfoBubblePosition
 import com.mapconductor.core.circle.CircleCapableInterface
 import com.mapconductor.core.features.GeoPoint
 import com.mapconductor.core.groundimage.GroundImageCapableInterface
@@ -123,20 +126,21 @@ class ArcGISMapViewWrapper(context: Context) :
     private val markerCompositionBuffer = mutableListOf<MarkerState>()
     private var markerCompositionIcons: List<MarkerIconInterface?> = emptyList()
     private var markerTilingOptions = MarkerTilingOptions.Default
-    private var infoBubblePositions: List<InfoBubblePosition> = emptyList()
+    private var infoBubblePositions: List<WrapperInfoBubblePosition> = emptyList()
 
     // Camera listeners fire on every frame during pan/zoom. When there is nothing to
     // report (marker tiling active, no markers, no open info bubbles), emitting an empty
     // positions payload every frame floods the bridge and forces a JS setState per frame,
     // so an empty payload is emitted once as a clearing event and then suppressed until
     // there is data again. Both flags are only touched on the main thread.
-    private var emittedEmptyMarkerScreenPositions = false
-    private var emittedEmptyInfoBubbleScreenPositions = false
     private var latestCameraPosition: MapCameraPosition? = null
     private var requestedCameraPosition: MapCameraPosition? = null
+    private val events = MapViewWrapperEventEmitter(this)
+    private val screenPositions = MapViewWrapperScreenPositions(events, mainCoroutine)
+
     private val nativeMapExtensionHost =
         NativeMapExtensionHostState(context) { extensionId, eventName, payload ->
-            emit(
+            events.emit(
                 "topNativeMapExtensionEvent",
                 Arguments.createMap().apply {
                     putString("extensionId", extensionId)
@@ -203,7 +207,7 @@ class ArcGISMapViewWrapper(context: Context) :
                 if (emittedMapLoaded) return@emitMapLoaded
                 emittedMapLoaded = true
                 markerTrace("SDK onMapLoaded callback")
-                emit("topMapLoaded", Arguments.createMap())
+                events.emit("topMapLoaded", Arguments.createMap())
                 emitMarkerScreenPositions()
                 emitInfoBubbleScreenPositions()
             }
@@ -259,13 +263,7 @@ class ArcGISMapViewWrapper(context: Context) :
     }
 
     fun setInfoBubblePositions(positions: ReadableArray?) {
-        infoBubblePositions =
-            (0 until (positions?.size() ?: 0)).mapNotNull { index ->
-                val position = positions?.getMap(index) ?: return@mapNotNull null
-                val id = position.getStringOrNull("id") ?: return@mapNotNull null
-                val point = GeoPoint.fromReadableMap(position) ?: return@mapNotNull null
-                InfoBubblePosition(id = id, point = point)
-            }
+        infoBubblePositions = MapViewWrapperScreenPositions.parseInfoBubblePositions(positions)
         emitInfoBubbleScreenPositions()
     }
 
@@ -276,27 +274,27 @@ class ArcGISMapViewWrapper(context: Context) :
 
     private fun configureController(controller: ArcGISMapView2DController) {
         controller.setCameraMoveStartListener { camera ->
-            emitCameraEvent("topCameraMoveStart", camera)
+            events.emitCameraEvent("topCameraMoveStart", camera.toWritableMap())
             emitMarkerScreenPositions()
             emitInfoBubbleScreenPositions()
         }
         controller.setCameraMoveListener { camera ->
-            emitCameraEvent("topCameraMove", camera)
+            events.emitCameraEvent("topCameraMove", camera.toWritableMap())
             emitMarkerScreenPositions()
             emitInfoBubbleScreenPositions()
         }
         controller.setCameraMoveEndListener { camera ->
-            emitCameraEvent("topCameraMoveEnd", camera)
+            events.emitCameraEvent("topCameraMoveEnd", camera.toWritableMap())
             emitMarkerScreenPositions()
             emitInfoBubbleScreenPositions()
         }
         controller.setMapClickListener {
             val zoom = latestCameraPosition?.zoom ?: requestedCameraPosition?.zoom ?: MapCameraPosition.Default.zoom
             if (!nativeMapExtensionHost.dispatchMapClick(it, zoom)) {
-                emitPointEvent("topMapClick", it)
+                events.emitPointEvent("topMapClick", it)
             }
         }
-        controller.setMapLongClickListener { emitPointEvent("topMapLongClick", it) }
+        controller.setMapLongClickListener { events.emitPointEvent("topMapLongClick", it) }
     }
 
     fun clearOverlays() {
@@ -334,7 +332,7 @@ class ArcGISMapViewWrapper(context: Context) :
                     payload = payload,
                     context = context,
                     previousStates = previousStates,
-                    onMarkerEvent = ::handleMarkerEvent,
+                    onMarkerEvent = events::handleMarkerEvent,
                 )
             markerStates = nextStates
             runMarkerControllerCall { mapController?.compositionMarkers(nextStates) }
@@ -383,7 +381,7 @@ class ArcGISMapViewWrapper(context: Context) :
                     payload = payload,
                     context = context,
                     sharedIcons = markerCompositionIcons,
-                    onMarkerEvent = ::handleMarkerEvent,
+                    onMarkerEvent = events::handleMarkerEvent,
                 )
             markerTrace(
                 "append decoded generation=$generation sequence=$sequence count=$count " +
@@ -391,7 +389,7 @@ class ArcGISMapViewWrapper(context: Context) :
             )
             withContext(Dispatchers.Main) {
                 markerTrace("append ACK emit generation=$generation sequence=$sequence")
-                emitMarkerCompositionBatchProcessed(generation, sequence)
+                events.emitMarkerCompositionBatchProcessed(generation, sequence)
             }
         }
     }
@@ -429,7 +427,7 @@ class ArcGISMapViewWrapper(context: Context) :
             val previousStates = markerStates
             val existing = id?.let { markerId -> previousStates.firstOrNull { it.id == markerId } }
             if (existing == null) {
-                val state = decodeNativeMarkerState(marker, context, ::handleMarkerEvent) ?: return@launch
+                val state = decodeNativeMarkerState(marker, context, events::handleMarkerEvent) ?: return@launch
                 markerStates = markerStates + state
                 runMarkerControllerCall { mapController?.compositionMarkers(markerStates) }
                 withContext(Dispatchers.Main) {
@@ -449,42 +447,42 @@ class ArcGISMapViewWrapper(context: Context) :
     }
 
     fun compositionPolylines(polylines: ReadableArray?) {
-        val states = polylineStatesFromReadableArray(polylines, ::emitPolylineClick)
+        val states = polylineStatesFromReadableArray(polylines, events::emitPolylineClick)
         mainCoroutine.launch {
             mapController?.compositionPolylines(states)
         }
     }
 
     fun compositionCircles(circles: ReadableArray?) {
-        val states = circleStatesFromReadableArray(circles, ::emitCircleClick)
+        val states = circleStatesFromReadableArray(circles, events::emitCircleClick)
         mainCoroutine.launch {
             mapController?.compositionCircles(states)
         }
     }
 
     fun updateCircle(circle: ReadableMap?) {
-        val state = circleStateFromReadableMap(circle, ::emitCircleClick) ?: return
+        val state = circleStateFromReadableMap(circle, events::emitCircleClick) ?: return
         mainCoroutine.launch {
             mapController?.updateCircle(state)
         }
     }
 
     fun compositionPolygons(polygons: ReadableArray?) {
-        val states = polygonStatesFromReadableArray(polygons, ::emitPolygonClick)
+        val states = polygonStatesFromReadableArray(polygons, events::emitPolygonClick)
         mainCoroutine.launch {
             mapController?.compositionPolygons(states)
         }
     }
 
     fun updatePolygon(polygon: ReadableMap?) {
-        val state = polygonStateFromReadableMap(polygon, ::emitPolygonClick) ?: return
+        val state = polygonStateFromReadableMap(polygon, events::emitPolygonClick) ?: return
         mainCoroutine.launch {
             mapController?.updatePolygon(state)
         }
     }
 
     fun updatePolyline(polyline: ReadableMap?) {
-        val state = polylineStateFromReadableMap(polyline, ::emitPolylineClick) ?: return
+        val state = polylineStateFromReadableMap(polyline, events::emitPolylineClick) ?: return
         mainCoroutine.launch {
             mapController?.updatePolyline(state)
         }
@@ -501,7 +499,7 @@ class ArcGISMapViewWrapper(context: Context) :
     }
 
     fun compositionGroundImages(images: ReadableArray?) {
-        val states = groundImageStatesFromReadableArray(images, context, ::emitGroundImageClick)
+        val states = groundImageStatesFromReadableArray(images, context, events::emitGroundImageClick)
         val previousIds = groundImageStates.keys
         groundImageStates = states.associateBy { it.id }
         val extensionImages =
@@ -511,7 +509,7 @@ class ArcGISMapViewWrapper(context: Context) :
     }
 
     fun updateGroundImage(image: ReadableMap?) {
-        val state = groundImageStateFromReadableMap(image, context, ::emitGroundImageClick) ?: return
+        val state = groundImageStateFromReadableMap(image, context, events::emitGroundImageClick) ?: return
         groundImageStates = groundImageStates + (state.id to state)
         extensionScope.groundImageCollector.flow.value =
             extensionScope.groundImageCollector.flow.value
@@ -572,54 +570,6 @@ class ArcGISMapViewWrapper(context: Context) :
         emitInfoBubbleScreenPositions()
     }
 
-    private fun handleMarkerEvent(
-        eventName: String,
-        state: MarkerState,
-    ) {
-        when (eventName) {
-            "markerClick" -> emit("topMarkerClick", Arguments.createMap().apply { putString("markerId", state.id) })
-            "markerDragStart" -> emitMarkerDrag("topMarkerDragStart", state)
-            "markerDrag" -> emitMarkerDrag("topMarkerDrag", state)
-            "markerDragEnd" -> emitMarkerDrag("topMarkerDragEnd", state)
-            "markerAnimateStart" -> emitMarkerAnimate("topMarkerAnimateStart", state)
-            "markerAnimateEnd" -> emitMarkerAnimate("topMarkerAnimateEnd", state)
-        }
-    }
-
-    private fun emitMarkerDrag(
-        eventName: String,
-        state: MarkerState,
-    ) {
-        emit(
-            eventName,
-            Arguments.createMap().apply {
-                putString("markerId", state.id)
-                putMap("point", GeoPoint.from(state.position).toWritableMap())
-            },
-        )
-    }
-
-    private fun emitMarkerAnimate(
-        eventName: String,
-        state: MarkerState,
-    ) {
-        emit(
-            eventName,
-            Arguments.createMap().apply {
-                putString("markerId", state.id)
-            },
-        )
-    }
-
-    private fun emitCameraEvent(
-        eventName: String,
-        camera: MapCameraPosition,
-    ) {
-        val logicalCamera = restoreRequestedNegativeTiltCamera(camera)
-        latestCameraPosition = logicalCamera
-        emit(eventName, Arguments.createMap().apply { putMap("cameraPosition", logicalCamera.toWritableMap()) })
-    }
-
     private fun restoreRequestedNegativeTiltCamera(camera: MapCameraPosition): MapCameraPosition {
         val requested = requestedCameraPosition ?: return camera
         if (requested.tilt >= 0.0) return camera
@@ -630,168 +580,18 @@ class ArcGISMapViewWrapper(context: Context) :
         )
     }
 
-    private fun emitPointEvent(
-        eventName: String,
-        point: GeoPoint,
-    ) {
-        emit(eventName, Arguments.createMap().apply { putMap("point", point.toWritableMap()) })
-    }
-
-    private fun emitPolylineClick(
-        id: String,
-        event: com.mapconductor.core.polyline.PolylineEvent,
-    ) {
-        emit(
-            "topPolylineClick",
-            Arguments.createMap().apply {
-                putString("polylineId", id)
-                putMap("point", GeoPoint.from(event.clicked).toWritableMap())
-            },
-        )
-    }
-
-    private fun emitCircleClick(
-        id: String,
-        event: com.mapconductor.core.circle.CircleEvent,
-    ) {
-        emit(
-            "topCircleClick",
-            Arguments.createMap().apply {
-                putString("circleId", id)
-                putMap("point", GeoPoint.from(event.clicked).toWritableMap())
-            },
-        )
-    }
-
-    private fun emitPolygonClick(
-        id: String,
-        event: com.mapconductor.core.polygon.PolygonEvent,
-    ) {
-        emit(
-            "topPolygonClick",
-            Arguments.createMap().apply {
-                putString("polygonId", id)
-                putMap("point", GeoPoint.from(event.clicked).toWritableMap())
-            },
-        )
-    }
-
-    private fun emitGroundImageClick(
-        id: String,
-        event: com.mapconductor.core.groundimage.GroundImageEvent,
-    ) {
-        val clicked = event.clicked ?: return
-        emit(
-            "topGroundImageClick",
-            Arguments.createMap().apply {
-                putString("groundImageId", id)
-                putMap("point", GeoPoint.from(clicked).toWritableMap())
-            },
-        )
-    }
-
-    private fun emitMarkerScreenPositions() {
-        val tilingActive = markerStates.size >= markerTilingOptions.minMarkerCount
-        if (tilingActive || markerStates.isEmpty()) {
-            if (emittedEmptyMarkerScreenPositions) return
-            emittedEmptyMarkerScreenPositions = true
-            mainCoroutine.launch {
-                emit(
-                    "topMarkerScreenPositions",
-                    Arguments.createMap().apply { putArray("positions", Arguments.createArray()) },
-                )
-            }
-            return
-        }
-        emittedEmptyMarkerScreenPositions = false
-        mainCoroutine.launch {
-            val density = ResourceProvider.getDensity()
-            val holder = mapController?.holder ?: return@launch
-            val projection = screenProjection()
-            val array =
-                Arguments.createArray().apply {
-                    markerStates.forEach { marker ->
-                        val offset =
-                            projection?.toScreenOffset(marker.position)
-                                ?: holder.toScreenOffset(marker.position)
-                                ?: return@forEach
-                        pushMap(
-                            Arguments.createMap().apply {
-                                putString("markerId", marker.id)
-                                putDouble("x", offset.x.toDouble() / density)
-                                putDouble("y", offset.y.toDouble() / density)
-                            },
-                        )
-                    }
-                }
-            emit("topMarkerScreenPositions", Arguments.createMap().apply { putArray("positions", array) })
-        }
-    }
-
-    private fun emitInfoBubbleScreenPositions() {
-        if (infoBubblePositions.isEmpty()) {
-            if (emittedEmptyInfoBubbleScreenPositions) return
-            emittedEmptyInfoBubbleScreenPositions = true
-            mainCoroutine.launch {
-                emit(
-                    "topInfoBubbleScreenPositions",
-                    Arguments.createMap().apply { putArray("positions", Arguments.createArray()) },
-                )
-            }
-            return
-        }
-        emittedEmptyInfoBubbleScreenPositions = false
-        mainCoroutine.launch {
-            val density = ResourceProvider.getDensity()
-            val holder = mapController?.holder ?: return@launch
-            val projection = screenProjection()
-            val array =
-                Arguments.createArray().apply {
-                    infoBubblePositions.forEach { position ->
-                        val offset =
-                            projection?.toScreenOffset(position.point)
-                                ?: holder.toScreenOffset(position.point)
-                                ?: return@forEach
-                        pushMap(
-                            Arguments.createMap().apply {
-                                putString("id", position.id)
-                                putDouble("x", offset.x.toDouble() / density)
-                                putDouble("y", offset.y.toDouble() / density)
-                            },
-                        )
-                    }
-                }
-            emit("topInfoBubbleScreenPositions", Arguments.createMap().apply { putArray("positions", array) })
-        }
-    }
-
     private fun screenProjection(): Wms84Projection? {
         val camera = latestCameraPosition ?: requestedCameraPosition ?: MapCameraPosition.Default
         if (camera.visibleRegion == null) return null
         return Wms84Projection(camera, width, height)
     }
 
-    private fun emit(
-        eventName: String,
-        event: WritableMap,
-    ) {
-        val reactContext = context as? ReactContext ?: return
-        val surfaceId = UIManagerHelper.getSurfaceId(this)
-        UIManagerHelper.getEventDispatcher(reactContext)
-            ?.dispatchEvent(ArcGISMapViewWrapperEvent(surfaceId, id, eventName, event))
+    private fun emitMarkerScreenPositions() {
+        screenPositions.emitMarkers(markerStates, markerTilingOptions, { screenProjection()?.toScreenOffset(it) ?: mapController?.holder?.toScreenOffset(it) })
     }
 
-    private fun emitMarkerCompositionBatchProcessed(
-        generation: Int,
-        sequence: Int,
-    ) {
-        emit(
-            "topMarkerCompositionBatchProcessed",
-            Arguments.createMap().apply {
-                putInt("generation", generation)
-                putInt("sequence", sequence)
-            },
-        )
+    private fun emitInfoBubbleScreenPositions() {
+        screenPositions.emitInfoBubbles(infoBubblePositions, { screenProjection()?.toScreenOffset(it) ?: mapController?.holder?.toScreenOffset(it) })
     }
 
     private fun markerTrace(message: String) {
@@ -818,115 +618,4 @@ class ArcGISMapViewWrapper(context: Context) :
             markerTrace("marker controller call skipped after teardown: ${e.message}")
         }
     }
-}
-
-@Composable
-private fun RenderNativeExtensions(
-    scope: MapViewScope,
-    registry: MapOverlayRegistry,
-    controller: ArcGISMapView2DController,
-    serviceRegistry: MutableMapServiceRegistry,
-    host: NativeMapExtensionHostState,
-) {
-    DisposableEffect(controller) {
-        scope.groundImageCollector.setUpdateHandler { state ->
-            (controller as GroundImageCapableInterface).let { capable ->
-                if (capable.hasGroundImage(state)) capable.updateGroundImage(state)
-            }
-        }
-        scope.rasterLayerCollector.setUpdateHandler { state ->
-            (controller as RasterLayerCapableInterface).let { capable ->
-                if (capable.hasRasterLayer(state)) capable.updateRasterLayer(state)
-            }
-        }
-        scope.polygonCollector.setUpdateHandler { state ->
-            (controller as PolygonCapableInterface).let { capable ->
-                if (capable.hasPolygon(state)) capable.updatePolygon(state)
-            }
-        }
-        scope.polylineCollector.setUpdateHandler { state ->
-            (controller as PolylineCapableInterface).let { capable ->
-                if (capable.hasPolyline(state)) capable.updatePolyline(state)
-            }
-        }
-        scope.circleCollector.setUpdateHandler { state ->
-            (controller as CircleCapableInterface).let { capable ->
-                if (capable.hasCircle(state)) capable.updateCircle(state)
-            }
-        }
-        onDispose {
-            scope.groundImageCollector.setUpdateHandler(null)
-            scope.rasterLayerCollector.setUpdateHandler(null)
-            scope.polygonCollector.setUpdateHandler(null)
-            scope.polylineCollector.setUpdateHandler(null)
-            scope.circleCollector.setUpdateHandler(null)
-        }
-    }
-
-    CollectAndRenderOverlays(
-        registry = registry,
-        controller = controller,
-    )
-    CompositionLocalProvider(
-        LocalMapOverlayRegistry provides registry,
-        LocalMapServiceRegistry provides serviceRegistry,
-        LocalMapViewController provides controller,
-        LocalInfoBubbleCollector provides scope.bubbleFlow,
-        LocalCircleCollector provides scope.circleCollector,
-        LocalPolylineCollector provides scope.polylineCollector,
-        LocalPolygonCollector provides scope.polygonCollector,
-        LocalGroundImageCollector provides scope.groundImageCollector,
-        LocalRasterLayerCollector provides scope.rasterLayerCollector,
-    ) {
-        with(scope) {
-            with(host) { RenderExtensions() }
-        }
-    }
-}
-
-private const val MARKER_TRACE_TAG = "MCMarkerTrace"
-
-private fun markerTilingOptionsFromReadableMap(map: ReadableMap?, viewId: Int): MarkerTilingOptions {
-    if (map == null) return MarkerTilingOptions.Default
-    val hasIconScaleCallback = map.getBooleanOrNull("hasIconScaleCallback") ?: false
-    return MarkerTilingOptions.Default.copy(
-        enabled = map.getBooleanOrNull("enabled") ?: MarkerTilingOptions.Default.enabled,
-        debugTileOverlay = map.getBooleanOrNull("debugTileOverlay")
-            ?: MarkerTilingOptions.Default.debugTileOverlay,
-        minMarkerCount = map.getIntOrNull("minMarkerCount") ?: MarkerTilingOptions.Default.minMarkerCount,
-        cacheSize = map.getIntOrNull("cacheSize") ?: MarkerTilingOptions.Default.cacheSize,
-        iconScaleCallback =
-            if (hasIconScaleCallback) {
-                { state: MarkerState, zoom: Int -> MarkerScaleBridge.requestScale(viewId, state.id, zoom) }
-            } else {
-                null
-            },
-    )
-}
-
-private data class InfoBubblePosition(
-    val id: String,
-    val point: GeoPoint,
-)
-
-private fun ReadableMap.getStringOrNull(key: String): String? =
-    if (hasKey(key) && !isNull(key)) getString(key) else null
-
-private fun ReadableMap.getBooleanOrNull(key: String): Boolean? =
-    if (hasKey(key) && !isNull(key)) getBoolean(key) else null
-
-private fun ReadableMap.getIntOrNull(key: String): Int? =
-    if (hasKey(key) && !isNull(key)) getInt(key) else null
-
-private class ArcGISMapViewWrapperEvent(
-    surfaceId: Int,
-    viewTag: Int,
-    private val name: String,
-    private val payload: WritableMap,
-) : Event<ArcGISMapViewWrapperEvent>(surfaceId, viewTag) {
-    override fun getEventName(): String = name
-
-    override fun canCoalesce(): Boolean = false
-
-    override fun getEventData(): WritableMap = payload
 }
