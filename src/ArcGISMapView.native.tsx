@@ -22,15 +22,15 @@ import {
   useCameraRestriction,
   useMarkerRenderingSupport,
 } from '@mapconductor/js-sdk-react/internal';
-import type { ArcGISViewState } from '@mapconductor/react-for-arcgis';
+import type { ArcGISMapViewStateInterface } from '@mapconductor/react-for-arcgis/state';
 import { ArcGISMapViewController } from './ArcGISMapViewController.native';
 import NativeArcGISMapView, {
   toNativeCameraPosition,
   toNativeMarkerTilingOptions,
 } from './ArcGISMapViewNativeComponent';
 
-export interface ArcGISMapViewProps extends Omit<MapViewBaseProps<ArcGISViewState>, 'state'> {
-  state?: ArcGISViewState;
+export interface ArcGISMapViewProps extends Omit<MapViewBaseProps<ArcGISMapViewStateInterface>, 'state'> {
+  state?: ArcGISMapViewStateInterface;
   mapId?: string;
   markerTilingOptions?: MarkerTilingOptions;
   className?: string;
@@ -148,10 +148,9 @@ export function ArcGISMapView({
     mapViewStateInternal(state).setController(controller);
 
     controller.setMapInitializedListener(() => {
-        setIsLoaded(true);
-        setIsLoaded(true);
-        onMapLoadedRef.current?.(state);
-      });
+      setIsLoaded(true);
+      onMapLoadedRef.current?.(state);
+    });
     controller.setMapClickListener((point) => onMapClickRef.current?.(point));
     controller.setMapLongClickListener((point) => onMapLongClickRef.current?.(point));
     controller.setCameraMoveStartListener((camera) => {
