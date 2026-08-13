@@ -40,6 +40,7 @@ import com.mapconductor.core.map.LocalMapOverlayRegistry
 import com.mapconductor.core.map.LocalMapServiceRegistry
 import com.mapconductor.core.map.LocalMapViewController
 import com.mapconductor.core.map.MapCameraPosition
+import com.mapconductor.core.map.MapUISettings
 import com.mapconductor.core.map.MapOverlayRegistry
 import com.mapconductor.core.map.MutableMapServiceRegistry
 import com.mapconductor.core.marker.MarkerIconInterface
@@ -118,6 +119,9 @@ class ArcGISMapViewWrapper(context: Context) :
     private var mapController: ArcGISMapView2DController? = null
     private var initialized = false
     private var pendingMapDesign: ArcGISDesignTypeInterface = ArcGISDesign.Streets
+    // ビュー生成前に applyUISettings が来ることがある（RN は prop/command の到達順を
+    // 保証しない）。コントローラが出来た時点で configureController から流し込む。
+    private var pendingUISettings: MapUISettings = MapUISettings.Default
     private var pendingApiKey: String? = null
     private var rasterLayerStates: Map<String, com.mapconductor.core.raster.RasterLayerState> = emptyMap()
     private var groundImageStates: Map<String, com.mapconductor.core.groundimage.GroundImageState> = emptyMap()
@@ -273,6 +277,7 @@ class ArcGISMapViewWrapper(context: Context) :
     }
 
     private fun configureController(controller: ArcGISMapView2DController) {
+        controller.applyUISettings(pendingUISettings)
         controller.setCameraMoveStartListener { camera ->
             events.emitCameraEvent("topCameraMoveStart", camera.toWritableMap())
             emitMarkerScreenPositions()
@@ -295,6 +300,23 @@ class ArcGISMapViewWrapper(context: Context) :
             }
         }
         controller.setMapLongClickListener { events.emitPointEvent("topMapLongClick", it) }
+    }
+
+
+    /**
+     * `state.uiSettings` のジェスチャ設定をネイティブへ適用する。
+     * 省略されたフラグは MapUISettings の既定（true = 有効）に倒す。
+     */
+    fun applyUISettings(payload: ReadableMap?) {
+        val settings =
+            MapUISettings(
+                scrollGesture = payload?.takeIf { it.hasKey("scrollGesture") }?.getBoolean("scrollGesture") ?: true,
+                zoomGesture = payload?.takeIf { it.hasKey("zoomGesture") }?.getBoolean("zoomGesture") ?: true,
+                rotateGesture = payload?.takeIf { it.hasKey("rotateGesture") }?.getBoolean("rotateGesture") ?: true,
+                tiltGesture = payload?.takeIf { it.hasKey("tiltGesture") }?.getBoolean("tiltGesture") ?: true,
+            )
+        pendingUISettings = settings
+        mapController?.applyUISettings(settings)
     }
 
     fun clearOverlays() {
