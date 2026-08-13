@@ -1,5 +1,7 @@
 package com.mapconductor.react.arcgis
 
+import com.mapconductor.react.codec.getBooleanOrNull
+import com.mapconductor.react.codec.getIntOrNull
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
@@ -50,12 +52,12 @@ import com.mapconductor.core.polygon.PolygonCapableInterface
 import com.mapconductor.core.polyline.PolylineCapableInterface
 import com.mapconductor.core.raster.RasterLayerCapableInterface
 import com.mapconductor.react.extensions.NativeMapExtensionHostState
-import com.mapconductor.react.arcgis.circle.circleStateFromReadableMap
-import com.mapconductor.react.arcgis.circle.circleStatesFromReadableArray
-import com.mapconductor.react.arcgis.polyline.polylineStateFromReadableMap
-import com.mapconductor.react.arcgis.polyline.polylineStatesFromReadableArray
-import com.mapconductor.react.arcgis.polygon.polygonStateFromReadableMap
-import com.mapconductor.react.arcgis.polygon.polygonStatesFromReadableArray
+import com.mapconductor.react.circle.circleStateFromReadableMap
+import com.mapconductor.react.circle.circleStatesFromReadableArray
+import com.mapconductor.react.polyline.polylineStateFromReadableMap
+import com.mapconductor.react.polyline.polylineStatesFromReadableArray
+import com.mapconductor.react.polygon.polygonStateFromReadableMap
+import com.mapconductor.react.polygon.polygonStatesFromReadableArray
 import com.mapconductor.react.marker.MarkerScaleBridge
 import com.mapconductor.react.marker.applyNativeMarkerUpdate
 import com.mapconductor.react.marker.decodeNativeMarkerBatch
