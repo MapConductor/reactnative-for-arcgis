@@ -2,7 +2,7 @@ import { ArcGISMapViewStateInterface } from '@mapconductor/react-for-arcgis/stat
 export { ArcGISDesign, ArcGISDesignType, ArcGISMapViewState, ArcGISViewState, ArcGISViewStateOptions, useArcGISViewState } from '@mapconductor/react-for-arcgis/state';
 import React from 'react';
 import { ViewProps, HostComponent, NativeMethods } from 'react-native';
-import { GeoPoint, MapCameraPosition, MarkerTilingOptions, MapViewHolder, Offset, BaseMapViewController, MapViewControllerInterface, CircleCapable, GroundImageCapable, MarkerCapable, PolygonCapable, PolylineCapable, RasterLayerCapable, NativeMapExtensionCapable, GeoRectBounds, MapUISettings, MarkerState, PolylineState, CircleState, OnCircleEventHandler, GroundImageState, OnGroundImageEventHandler, PolygonState, OnPolygonEventHandler, OnPolylineEventHandler, RasterLayerState, NativeMapExtensionDescriptor, NativeMapExtensionEventHandler, NativeMapExtensionEvent as NativeMapExtensionEvent$1, OnMarkerEventHandler, MarkerAnimationOverlayHost } from '@mapconductor/js-sdk-core';
+import { GeoPoint, MapCameraPosition, MarkerTilingOptions, MapViewHolderBase, Offset, BaseMapViewController, MapViewControllerInterface, CircleCapable, GroundImageCapable, MarkerCapable, PolygonCapable, PolylineCapable, RasterLayerCapable, NativeMapExtensionCapable, GeoRectBounds, MapUISettings, MarkerState, PolylineState, CircleState, OnCircleEventHandler, GroundImageState, OnGroundImageEventHandler, PolygonState, OnPolygonEventHandler, OnPolylineEventHandler, RasterLayerState, NativeMapExtensionDescriptor, NativeMapExtensionEventHandler, NativeMapExtensionEvent as NativeMapExtensionEvent$1, OnMarkerEventHandler, MarkerAnimationOverlayHost } from '@mapconductor/js-sdk-core';
 import { NativeMapExtensionEvent, MapViewBaseProps } from '@mapconductor/js-sdk-react/native';
 
 interface NativeArcGISMapViewEvent<T> {
@@ -129,13 +129,12 @@ type ArcGISMapViewRef = React.ComponentRef<HostComponent<NativeArcGISMapViewProp
 type ArcGISMapMapView = ArcGISMapViewRef | null;
 type ArcGISMapMap = null;
 
-declare class ArcGISMapViewHolder implements MapViewHolder<ArcGISMapViewRef | null, null> {
+declare class ArcGISMapViewHolder extends MapViewHolderBase<ArcGISMapViewRef | null, null> {
     private readonly nativeRef;
     readonly map: null;
     constructor(nativeRef: React.RefObject<ArcGISMapViewRef | null>);
     get mapView(): ArcGISMapViewRef | null;
     toScreenOffset(_position: GeoPoint): null;
-    fromScreenOffset(_offset: Offset): Promise<GeoPoint | null>;
     fromScreenOffsetSync(_offset: Offset): GeoPoint | null;
 }
 
