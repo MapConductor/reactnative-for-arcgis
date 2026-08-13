@@ -1,24 +1,8 @@
-import type React from 'react';
-import { MapViewHolderBase } from '@mapconductor/js-sdk-core';
-import type { GeoPoint, Offset } from '@mapconductor/js-sdk-core';
+import { ReactNativeMapViewHolder } from '@mapconductor/js-sdk-react/internal';
 import type { ArcGISMapViewRef } from './ArcGISTypeAlias.native';
 
-export class ArcGISMapViewHolder extends MapViewHolderBase<ArcGISMapViewRef | null, null> {
-  readonly map = null;
-
-  constructor(private readonly nativeRef: React.RefObject<ArcGISMapViewRef | null>) {
-    super();
-  }
-
-  get mapView(): ArcGISMapViewRef | null {
-    return this.nativeRef.current;
-  }
-
-  toScreenOffset(_position: GeoPoint): null {
-    return null;
-  }
-
-  fromScreenOffsetSync(_offset: Offset): GeoPoint | null {
-    return null;
-  }
-}
+/**
+ * RN のホルダーは全プロバイダで同一（投影はネイティブ側が行う）なので
+ * {@link ReactNativeMapViewHolder} に集約してある。ここは ref 型を与えるだけ。
+ */
+export class ArcGISMapViewHolder extends ReactNativeMapViewHolder<ArcGISMapViewRef> {}
