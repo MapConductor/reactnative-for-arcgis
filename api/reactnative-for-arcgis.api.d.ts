@@ -1,132 +1,20 @@
 import { ArcGISMapViewStateInterface } from '@mapconductor/react-for-arcgis/state';
 export { ArcGISDesign, ArcGISDesignType, ArcGISMapViewState, ArcGISViewState, ArcGISViewStateOptions, useArcGISViewState } from '@mapconductor/react-for-arcgis/state';
-import React from 'react';
-import { ViewProps, HostComponent, NativeMethods } from 'react-native';
-import { GeoPoint, MapCameraPosition, MarkerTilingOptions } from '@mapconductor/js-sdk-core';
-import { NativeMapExtensionEvent, MapViewBaseProps } from '@mapconductor/js-sdk-react/native';
-import { ReactNativeMapViewHolder, ReactNativeBridgeMapViewController } from '@mapconductor/js-sdk-react/internal';
+import * as React from 'react';
+import React__default from 'react';
+import { HostComponent, NativeMethods } from 'react-native';
+import { NativeMapViewProps, NativeMapViewEvent, ReactNativeMapViewHolder, ReactNativeBridgeMapViewController } from '@mapconductor/js-sdk-react/internal';
+export { NativeMarkerTilingOptions, toNativeCameraPosition, toNativeMarkerTilingOptions } from '@mapconductor/js-sdk-react/internal';
+import { MarkerTilingOptions } from '@mapconductor/js-sdk-core';
+import { MapViewBaseProps } from '@mapconductor/js-sdk-react/native';
 
-interface NativeArcGISMapViewEvent<T> {
-    nativeEvent: T;
-}
-interface NativeMarkerTilingOptions {
-    enabled: boolean;
-    debugTileOverlay: boolean;
-    minMarkerCount: number;
-    cacheSize: number;
-    /**
-     * A JS function can't cross the RN bridge, so this only signals that
-     * `iconScaleCallback` is set; the native wrapper resolves the actual
-     * per-marker scale by calling back into JS via MarkerScaleBridge (JSI).
-     */
-    hasIconScaleCallback: boolean;
-}
-interface NativeArcGISMapViewProps extends ViewProps {
+type NativeArcGISMapViewEvent<T> = NativeMapViewEvent<T>;
+/** プロバイダ固有のネイティブ props。共通部は NativeMapViewProps 側にある。 */
+interface NativeArcGISMapViewProps extends NativeMapViewProps {
     apiKey?: string;
-    cameraPosition?: {
-        position: {
-            latitude: number;
-            longitude: number;
-            altitude?: number | null;
-        };
-        zoom: number;
-        bearing: number;
-        tilt: number;
-    };
-    mapDesignType?: string;
-    markerTilingOptions?: NativeMarkerTilingOptions;
-    infoBubblePositions?: Array<{
-        id: string;
-        latitude: number;
-        longitude: number;
-        altitude?: number | null;
-    }>;
-    onMapLoaded?: () => void;
-    onMarkerCompositionBatchProcessed?: (event: NativeArcGISMapViewEvent<{
-        generation: number;
-        sequence: number;
-    }>) => void;
-    onMapClick?: (event: NativeArcGISMapViewEvent<{
-        point: GeoPoint;
-    }>) => void;
-    onMapLongClick?: (event: NativeArcGISMapViewEvent<{
-        point: GeoPoint;
-    }>) => void;
-    onCameraMoveStart?: (event: NativeArcGISMapViewEvent<{
-        cameraPosition: MapCameraPosition;
-    }>) => void;
-    onCameraMove?: (event: NativeArcGISMapViewEvent<{
-        cameraPosition: MapCameraPosition;
-    }>) => void;
-    onCameraMoveEnd?: (event: NativeArcGISMapViewEvent<{
-        cameraPosition: MapCameraPosition;
-    }>) => void;
-    onMarkerClick?: (event: NativeArcGISMapViewEvent<{
-        markerId: string;
-    }>) => void;
-    onCircleClick?: (event: NativeArcGISMapViewEvent<{
-        circleId: string;
-        point: GeoPoint;
-    }>) => void;
-    onGroundImageClick?: (event: NativeArcGISMapViewEvent<{
-        groundImageId: string;
-        point: GeoPoint;
-    }>) => void;
-    onPolylineClick?: (event: NativeArcGISMapViewEvent<{
-        polylineId: string;
-        point: GeoPoint;
-    }>) => void;
-    onPolygonClick?: (event: NativeArcGISMapViewEvent<{
-        polygonId: string;
-        point: GeoPoint;
-    }>) => void;
-    onMarkerDragStart?: (event: NativeArcGISMapViewEvent<{
-        markerId: string;
-        point: GeoPoint;
-    }>) => void;
-    onMarkerDrag?: (event: NativeArcGISMapViewEvent<{
-        markerId: string;
-        point: GeoPoint;
-    }>) => void;
-    onMarkerDragEnd?: (event: NativeArcGISMapViewEvent<{
-        markerId: string;
-        point: GeoPoint;
-    }>) => void;
-    onMarkerAnimateStart?: (event: NativeArcGISMapViewEvent<{
-        markerId: string;
-    }>) => void;
-    onMarkerAnimateEnd?: (event: NativeArcGISMapViewEvent<{
-        markerId: string;
-    }>) => void;
-    onMarkerScreenPositions?: (event: NativeArcGISMapViewEvent<{
-        positions: Array<{
-            markerId: string;
-            x: number;
-            y: number;
-        }>;
-    }>) => void;
-    onInfoBubbleScreenPositions?: (event: NativeArcGISMapViewEvent<{
-        positions: Array<{
-            id: string;
-            x: number;
-            y: number;
-        }>;
-    }>) => void;
-    onNativeMapExtensionEvent?: (event: NativeArcGISMapViewEvent<NativeMapExtensionEvent>) => void;
 }
-declare function toNativeMarkerTilingOptions(markerTilingOptions: MarkerTilingOptions | undefined): NativeMarkerTilingOptions | undefined;
-declare function toNativeCameraPosition(cameraPosition: MapCameraPosition | undefined): {
-    position: {
-        latitude: number;
-        longitude: number;
-        altitude: number;
-    };
-    zoom: number;
-    bearing: number;
-    tilt: number;
-} | undefined;
 
-type ArcGISMapViewRef = React.ComponentRef<HostComponent<NativeArcGISMapViewProps>> & NativeMethods;
+type ArcGISMapViewRef = React__default.ComponentRef<HostComponent<NativeArcGISMapViewProps>> & NativeMethods;
 type ArcGISMapMapView = ArcGISMapViewRef | null;
 type ArcGISMapMap = null;
 
@@ -145,13 +33,18 @@ declare class ArcGISMapViewHolder extends ReactNativeMapViewHolder<ArcGISMapView
 declare class ArcGISMapViewController extends ReactNativeBridgeMapViewController<ArcGISMapViewRef> {
 }
 
-interface ArcGISMapViewProps extends Omit<MapViewBaseProps<ArcGISMapViewStateInterface>, 'state'> {
-    state?: ArcGISMapViewStateInterface;
-    mapId?: string;
-    markerTilingOptions?: MarkerTilingOptions;
+interface ArcGISMapViewProps extends MapViewBaseProps<ArcGISMapViewStateInterface> {
     className?: string;
     onError?: (error: Error) => void;
+    children?: React__default.ReactNode;
+    markerTilingOptions?: MarkerTilingOptions;
 }
-declare function ArcGISMapView({ style, state, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, cameraRestriction, markerTilingOptions, children, }: ArcGISMapViewProps): React.JSX.Element;
 
-export { type ArcGISMapMap, type ArcGISMapMapView, ArcGISMapView, ArcGISMapViewController, ArcGISMapViewHolder, type ArcGISMapViewProps, type ArcGISMapViewRef, type NativeArcGISMapViewEvent, type NativeArcGISMapViewProps, type NativeMarkerTilingOptions, toNativeCameraPosition, toNativeMarkerTilingOptions };
+/**
+ * ネイティブイベントの配線・オーバーレイ収集・InfoBubble レイヤは全 RN プロバイダで
+ * 同一なので {@link NativeMapViewHost} に集約してある。ここで渡すのは
+ * 「どのネイティブビューか」「デザインをどう文字列化するか」だけ。
+ */
+declare function ArcGISMapView(props: ArcGISMapViewProps): React.JSX.Element;
+
+export { type ArcGISMapMap, type ArcGISMapMapView, ArcGISMapView, ArcGISMapViewController, ArcGISMapViewHolder, type ArcGISMapViewProps, type ArcGISMapViewRef, type NativeArcGISMapViewEvent, type NativeArcGISMapViewProps };

@@ -13,3 +13,4 @@ export * from './ArcGISMapViewHolder.native';
 export * from './ArcGISMapViewController.native';
 export * from './ArcGISMapView.native';
 export * from './ArcGISMapViewNativeComponent';
+export * from './ArcGISMapViewProps.native';
