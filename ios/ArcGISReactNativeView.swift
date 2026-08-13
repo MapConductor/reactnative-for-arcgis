@@ -352,25 +352,15 @@ public final class ArcGISReactNativeView: UIView {
     }
 }
 
-/// Maps the JS-side design ids from `@mapconductor/react-for-arcgis`'s `ArcGISDesign` catalog
-/// (e.g. "streets", "dark-gray") onto `MapConductorForArcGIS`'s much larger native basemap style
-/// catalog. A few web ids ("national-geographic", "dark-matter", "positron") have no exact native
-/// counterpart, so those fall back to the closest available style - keep this in sync with the
-/// Android side's `ArcGISReactNativeDesign.from()`.
+/// JS 側 `@mapconductor/react-for-arcgis` の `ArcGISDesign` カタログとネイティブの
+/// `MapConductorForArcGIS.ArcGISDesign` カタログは同じ id（"arc_gis_streets" など）を
+/// 使うため、変換表は持たずに id をそのままネイティブの `Create` へ渡す。
+/// 未知の id は Streets へフォールバックする。Android 側の
+/// `ArcGISReactNativeDesign.from()` と同じ挙動。
 private func arcGISDesign(forId value: String?) -> ArcGISMapDesignType {
-    switch value {
-    case "satellite": return ArcGISDesign.Imagery
-    case "hybrid": return ArcGISDesign.ImageryLabels
-    case "topo": return ArcGISDesign.Topographic
-    case "gray": return ArcGISDesign.LightGray
-    case "dark-gray": return ArcGISDesign.DarkGray
-    case "oceans": return ArcGISDesign.Oceans
-    case "national-geographic": return ArcGISDesign.Outdoor
-    case "osm": return ArcGISDesign.OsmStandard
-    case "dark-matter": return ArcGISDesign.OsmDarkGray
-    case "positron": return ArcGISDesign.OsmLightGray
-    default: return ArcGISDesign.Streets
-    }
+    guard let id = value else { return ArcGISDesign.Streets }
+    // Create は未知 id もそのまま包み、toBasemapStyle の default が Streets に解決する。
+    return ArcGISDesign.Create(id: id)
 }
 
 final class ReactNativeArcGISMapModel: ObservableObject {
