@@ -1,11 +1,11 @@
 import { ArcGISMapViewStateInterface } from '@mapconductor/react-for-arcgis/state';
-export { ArcGISDesign, ArcGISDesignType, ArcGISMapViewState, ArcGISViewState, ArcGISViewStateOptions, useArcGISViewState } from '@mapconductor/react-for-arcgis/state';
+export { ArcGISDesign, ArcGISDesignType, ArcGISDesignTypeInterface, ArcGISMapViewState, ArcGISMapViewStateInterface, ArcGISMapViewStateParams, ArcGISViewState, ArcGISViewStateOptions, useArcGISViewState } from '@mapconductor/react-for-arcgis/state';
 import * as React from 'react';
 import React__default from 'react';
 import { HostComponent, NativeMethods } from 'react-native';
 import { NativeMapViewProps, NativeMapViewEvent, ReactNativeMapViewHolder, ReactNativeBridgeMapViewController } from '@mapconductor/js-sdk-react/internal';
-export { NativeMarkerTilingOptions, toNativeCameraPosition, toNativeMarkerTilingOptions } from '@mapconductor/js-sdk-react/internal';
-import { MarkerTilingOptions } from '@mapconductor/js-sdk-core';
+export { NativeMarkerStatePayload as NativeArcGISMarkerState, NativeMarkerTilingOptions, markerStateToNative, toNativeCameraPosition, toNativeMarkerTilingOptions } from '@mapconductor/js-sdk-react/internal';
+import { MapViewControllerInterface, MarkerTilingOptions } from '@mapconductor/js-sdk-core';
 import { MapViewBaseProps } from '@mapconductor/js-sdk-react/native';
 
 type NativeArcGISMapViewEvent<T> = NativeMapViewEvent<T>;
@@ -17,6 +17,8 @@ interface NativeArcGISMapViewProps extends NativeMapViewProps {
 type ArcGISMapViewRef = React__default.ComponentRef<HostComponent<NativeArcGISMapViewProps>> & NativeMethods;
 type ArcGISMapMapView = ArcGISMapViewRef | null;
 type ArcGISMapMap = null;
+
+type ArcGISMapViewControllerInterface = MapViewControllerInterface;
 
 /**
  * RN のホルダーは全プロバイダで同一（投影はネイティブ側が行う）なので
@@ -47,4 +49,4 @@ interface ArcGISMapViewProps extends MapViewBaseProps<ArcGISMapViewStateInterfac
  */
 declare function ArcGISMapView(props: ArcGISMapViewProps): React.JSX.Element;
 
-export { type ArcGISMapMap, type ArcGISMapMapView, ArcGISMapView, ArcGISMapViewController, ArcGISMapViewHolder, type ArcGISMapViewProps, type ArcGISMapViewRef, type NativeArcGISMapViewEvent, type NativeArcGISMapViewProps };
+export { type ArcGISMapMap, type ArcGISMapMapView, ArcGISMapView, ArcGISMapViewController, type ArcGISMapViewControllerInterface, ArcGISMapViewHolder, type ArcGISMapViewProps, type ArcGISMapViewRef, type NativeArcGISMapViewEvent, type NativeArcGISMapViewProps };
