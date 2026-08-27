@@ -6,6 +6,7 @@
 @end
 
 // 入れ物の生成・reactTag からの解決は MCReactNativeMapViewManagerBase（js-sdk-react/ios）。
+// 2D と 3D の違いはネイティブビューのクラス名だけで、prop もイベントも同じ。
 @implementation MapConductorArcGISViewManager
 
 RCT_EXPORT_MODULE(ArcGISMapView)
@@ -24,7 +25,26 @@ MC_REACT_NATIVE_MAP_VIEW_MANAGER_BODY
 
 @end
 
+@implementation MapConductorArcGIS2DViewManager
+
+RCT_EXPORT_MODULE(ArcGISMapView2D)
+
+- (NSString *)mapViewClassName
+{
+  return @"MCArcGIS2DReactNativeView";
+}
+
+RCT_CUSTOM_VIEW_PROPERTY(apiKey, NSString, MCReactNativeMapContainerView)
+{
+  [(id<MCArcGISApiKeyConfigurable>)view.mapView setApiKey:json];
+}
+
+MC_REACT_NATIVE_MAP_VIEW_MANAGER_BODY
+
+@end
+
 __attribute__((constructor)) static void MCArcGISRegisterLegacyInterop(void)
 {
   MCReactNativeRegisterLegacyViewManagerInterop(@"ArcGISMapView");
+  MCReactNativeRegisterLegacyViewManagerInterop(@"ArcGISMapView2D");
 }

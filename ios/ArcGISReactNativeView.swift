@@ -12,9 +12,15 @@ import UIKit
 /// SwiftUI ビューそのもので、UIKit から直接組み立てる経路が SDK 側に無いため。
 /// 基底から見れば「`UIView` を返して `MapViewContent` を受け取る」点は他と同じなので、
 /// コマンド処理・マーカー取り込み・スクリーン座標の通知は共通のものがそのまま効く。
-@objc(MCArcGISReactNativeView)
-public final class ArcGISReactNativeView: MCReactNativeMapViewBase {
-    private let arcGISHost = ArcGISReactNativeHost()
+///
+/// 2D（`ArcGISMapView2D`）と 3D（`ArcGISMapView`）の違いは、この基底が持つ
+/// ``usesSceneView`` だけ。ios-for-arcgis 側は state もコントローラも共通なので、
+/// 分岐は SwiftUI ビューの選択 1 か所で済む。
+public class ArcGISReactNativeViewBase: MCReactNativeMapViewBase {
+    /// 3D（Esri の `SceneView`）なら true。サブクラスが決める。
+    class var usesSceneView: Bool { true }
+
+    private lazy var arcGISHost = ArcGISReactNativeHost(usesSceneView: type(of: self).usesSceneView)
 
     public override func makeHost() -> MCReactNativeMapHost { arcGISHost }
 
@@ -27,12 +33,32 @@ public final class ArcGISReactNativeView: MCReactNativeMapViewBase {
     }
 }
 
-/// `ArcGISMapView2D`（SwiftUI）を RN の基底クラスが扱える非ジェネリックな形へ翻訳する。
+/// 3D（`SceneView`）。他プラットフォームと同じく無印が 3D。
+@objc(MCArcGISReactNativeView)
+public final class ArcGISReactNativeView: ArcGISReactNativeViewBase {
+    override class var usesSceneView: Bool { true }
+}
+
+/// 2D（`MapView`）。
+@objc(MCArcGIS2DReactNativeView)
+public final class ArcGIS2DReactNativeView: ArcGISReactNativeViewBase {
+    override class var usesSceneView: Bool { false }
+}
+
+/// `ArcGISMapView` / `ArcGISMapView2D`（SwiftUI）を RN の基底クラスが扱える
+/// 非ジェネリックな形へ翻訳する。
 @MainActor
 final class ArcGISReactNativeHost: MCReactNativeMapHost {
     weak var mcDelegate: MCReactNativeMapHostDelegate?
 
+    /// 3D（`SceneView`）なら true。生成時に決まり、以後変わらない。
+    let usesSceneView: Bool
+
     var apiKey = ""
+
+    init(usesSceneView: Bool) {
+        self.usesSceneView = usesSceneView
+    }
 
     private let model = ArcGISContentModel()
     private var state: ArcGISMapViewState { model.state }
@@ -115,19 +141,35 @@ private struct ArcGISReactNativeRoot: View {
     @ObservedObject var model: ArcGISContentModel
     let host: ArcGISReactNativeHost
 
+    @ViewBuilder
     var body: some View {
         // revision を読んで再評価の依存関係を作る。
         let _ = model.revision
-        return ArcGISMapView2D(
-            state: model.state,
-            onMapLoaded: { _ in host.mcDelegate?.mcMapLoaded() },
-            onMapClick: { host.mcDelegate?.mcMapClick($0) },
-            onMapLongClick: { host.mcDelegate?.mcMapLongClick($0) },
-            onCameraMoveStart: { host.mcDelegate?.mcCameraMoveStart($0) },
-            onCameraMove: { host.mcDelegate?.mcCameraMove($0) },
-            onCameraMoveEnd: { host.mcDelegate?.mcCameraMoveEnd($0) },
-            sdkInitialize: { host.initializeSdk() },
-            content: { host.mcDelegate?.mcAssembleContent() ?? MapViewContent() }
-        )
+        // 2D と 3D は初期化子の形が同じなので、渡すハンドラは共通。分岐はビューの型だけ。
+        if host.usesSceneView {
+            ArcGISMapView(
+                state: model.state,
+                onMapLoaded: { _ in host.mcDelegate?.mcMapLoaded() },
+                onMapClick: { host.mcDelegate?.mcMapClick($0) },
+                onMapLongClick: { host.mcDelegate?.mcMapLongClick($0) },
+                onCameraMoveStart: { host.mcDelegate?.mcCameraMoveStart($0) },
+                onCameraMove: { host.mcDelegate?.mcCameraMove($0) },
+                onCameraMoveEnd: { host.mcDelegate?.mcCameraMoveEnd($0) },
+                sdkInitialize: { host.initializeSdk() },
+                content: { host.mcDelegate?.mcAssembleContent() ?? MapViewContent() }
+            )
+        } else {
+            ArcGISMapView2D(
+                state: model.state,
+                onMapLoaded: { _ in host.mcDelegate?.mcMapLoaded() },
+                onMapClick: { host.mcDelegate?.mcMapClick($0) },
+                onMapLongClick: { host.mcDelegate?.mcMapLongClick($0) },
+                onCameraMoveStart: { host.mcDelegate?.mcCameraMoveStart($0) },
+                onCameraMove: { host.mcDelegate?.mcCameraMove($0) },
+                onCameraMoveEnd: { host.mcDelegate?.mcCameraMoveEnd($0) },
+                sdkInitialize: { host.initializeSdk() },
+                content: { host.mcDelegate?.mcAssembleContent() ?? MapViewContent() }
+            )
+        }
     }
 }

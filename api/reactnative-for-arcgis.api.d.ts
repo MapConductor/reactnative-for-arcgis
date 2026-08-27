@@ -43,10 +43,14 @@ interface ArcGISMapViewProps extends MapViewBaseProps<ArcGISMapViewStateInterfac
 }
 
 /**
- * ネイティブイベントの配線・オーバーレイ収集・InfoBubble レイヤは全 RN プロバイダで
- * 同一なので {@link NativeMapViewHost} に集約してある。ここで渡すのは
- * 「どのネイティブビューか」「デザインをどう文字列化するか」だけ。
+ * 3D の地図（Esri の `SceneView`）。android-for-arcgis / ios-for-arcgis /
+ * react-for-arcgis の `ArcGISMapView` と同じく、無印が 3D。
  */
 declare function ArcGISMapView(props: ArcGISMapViewProps): React.JSX.Element;
+/**
+ * 2D の地図（Esri の `MapView`）。傾きは他プラットフォームと同じく擬似的な表現で、
+ * カメラそのものは傾かない。
+ */
+declare function ArcGISMapView2D(props: ArcGISMapViewProps): React.JSX.Element;
 
-export { type ArcGISMapMap, type ArcGISMapMapView, ArcGISMapView, ArcGISMapViewController, type ArcGISMapViewControllerInterface, ArcGISMapViewHolder, type ArcGISMapViewProps, type ArcGISMapViewRef, type NativeArcGISMapViewEvent, type NativeArcGISMapViewProps };
+export { type ArcGISMapMap, type ArcGISMapMapView, ArcGISMapView, ArcGISMapView2D, ArcGISMapViewController, type ArcGISMapViewControllerInterface, ArcGISMapViewHolder, type ArcGISMapViewProps, type ArcGISMapViewRef, type NativeArcGISMapViewEvent, type NativeArcGISMapViewProps };

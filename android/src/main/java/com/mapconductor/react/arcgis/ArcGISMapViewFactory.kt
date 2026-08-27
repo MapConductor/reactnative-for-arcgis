@@ -7,14 +7,22 @@ import com.arcgismaps.ApiKey
 import com.arcgismaps.ArcGISEnvironment
 import com.arcgismaps.LoadStatus
 import com.arcgismaps.mapping.ArcGISMap
+import com.arcgismaps.mapping.ArcGISScene
+import com.arcgismaps.mapping.ArcGISTiledElevationSource
 import com.arcgismaps.mapping.view.GraphicsOverlay
 import com.arcgismaps.mapping.view.GraphicsRenderingMode
+import com.arcgismaps.mapping.view.SurfacePlacement
 import com.mapconductor.arcgis.ArcGISDesign
 import com.mapconductor.arcgis.ArcGISDesignTypeInterface
+import com.mapconductor.arcgis.ArcGISGeoViewHolder
 import com.mapconductor.arcgis.ArcGISMapView2DController
 import com.mapconductor.arcgis.ArcGISMapView2DHolder
+import com.mapconductor.arcgis.ArcGISMapViewController
+import com.mapconductor.arcgis.ArcGISMapViewHolder
+import com.mapconductor.arcgis.ArcGISMapViewInitOptions
 import com.mapconductor.arcgis.ArcGISActualMarker
 import com.mapconductor.arcgis.WrapMapView
+import com.mapconductor.arcgis.WrapSceneView
 import com.mapconductor.arcgis.circle.ArcGISCircleOverlayController
 import com.mapconductor.arcgis.circle.ArcGISCircleOverlayRenderer
 import com.mapconductor.arcgis.groundimage.ArcGISGroundImageController
@@ -44,7 +52,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
- * `com.mapconductor.arcgis.ArcGISMapView2D`'s `getXController()` helpers and its
+ * `com.mapconductor.arcgis.ArcGISMapView`/`ArcGISMapView2D`'s `getXController()` helpers and their
  * `defaultArcGISInitialize()`/`getArcGisApiKey()` are `internal` to the android-for-arcgis module,
  * so this file mirrors their bodies (all the types they use - GraphicsOverlay, the per-feature
  * overlay controllers/renderers, MarkerManager, TileServerRegistry - are public) rather than
@@ -132,39 +140,129 @@ suspend fun createArcGISMapViewController(
             rasterLayerController = rasterLayerController,
         )
 
-    serviceRegistry?.let { registry ->
-        registry.clear()
-        registry.put(
-            MarkerRenderingSupportKey,
-            object : MarkerRenderingSupport<ArcGISActualMarker> {
-                override fun createMarkerRenderer(
-                    strategy: MarkerRenderingStrategyInterface<ArcGISActualMarker>,
-                ): MarkerOverlayRendererInterface<ArcGISActualMarker> = mapController.createMarkerRenderer()
-
-                override fun createMarkerEventController(
-                    controller: StrategyMarkerController<ArcGISActualMarker>,
-                    renderer: MarkerOverlayRendererInterface<ArcGISActualMarker>,
-                ): MarkerEventControllerInterface<ArcGISActualMarker> =
-                    mapController.createMarkerEventController(controller)
-
-                override fun registerMarkerEventController(
-                    controller: MarkerEventControllerInterface<ArcGISActualMarker>,
-                ) {
-                    mapController.registerMarkerEventController(controller)
-                }
-
-                override fun onMarkerRenderingReady() {
-                    mapController.sendInitialCameraUpdate()
-                }
-            },
-        )
-    }
+    registerMarkerRenderingSupport(
+        serviceRegistry = serviceRegistry,
+        createRenderer = { mapController.createMarkerRenderer() },
+        createEventController = { mapController.createMarkerEventController(it) },
+        registerEventController = { mapController.registerMarkerEventController(it) },
+        onRenderingReady = { mapController.sendInitialCameraUpdate() },
+    )
 
     return mapController
 }
 
+/**
+ * Builds the 3D `ArcGISScene` (basemap + the design's elevation sources), waits for it to finish
+ * loading, and assembles the `ArcGISMapViewController` with the same sub-controllers as the 2D
+ * path - mirroring `ArcGISMapView`'s `holderProvider`/`controllerProvider`. The only real
+ * differences from 2D are the scene/elevation setup and the marker overlay's surface placement.
+ */
+suspend fun createArcGISSceneViewController(
+    wrapView: WrapSceneView,
+    mapDesignType: ArcGISDesignTypeInterface,
+    markerTiling: MarkerTilingOptions = MarkerTilingOptions.Default,
+    serviceRegistry: MutableMapServiceRegistry? = null,
+): ArcGISMapViewController {
+    val options =
+        ArcGISMapViewInitOptions(
+            basemapStyle = ArcGISDesign.toBasemapStyle(mapDesignType),
+            elevationSources = mapDesignType.elevationSources,
+        )
+    val scene = ArcGISScene(options.basemapStyle)
+    options.elevationSources.forEach { scene.baseSurface.elevationSources.add(ArcGISTiledElevationSource(it)) }
+    wrapView.sceneView.scene = scene
+
+    val loadStatusScope = CoroutineScope(Dispatchers.Default)
+    val holder =
+        suspendCancellableCoroutine { cont ->
+            cont.invokeOnCancellation { loadStatusScope.cancel() }
+            loadStatusScope.launch {
+                scene.loadStatus.collect { status ->
+                    when (status) {
+                        // FailedToLoad でも holder は返す。オフラインでも地図ビュー自体は
+                        // 出したいので（android-for-arcgis の ArcGISMapView.kt と同じ判断）。
+                        is LoadStatus.Loaded, is LoadStatus.FailedToLoad ->
+                            if (cont.isActive) {
+                                cont.resumeWith(
+                                    Result.success(
+                                        ArcGISMapViewHolder(mapView = wrapView, map = wrapView.sceneView),
+                                    ),
+                                )
+                            }
+                        else -> Unit
+                    }
+                }
+            }
+        }
+
+    val markerLayer: GraphicsOverlay =
+        GraphicsOverlay().apply {
+            renderingMode = GraphicsRenderingMode.Dynamic
+            // 標高のある面にマーカーを貼り付ける。3D だけの設定。
+            sceneProperties.surfacePlacement = SurfacePlacement.Relative
+        }
+    holder.geoView.graphicsOverlays.add(markerLayer)
+
+    val mapController =
+        ArcGISMapViewController(
+            holder = holder,
+            markerController = getArcGISMarkerController(holder, markerLayer, markerTiling),
+            polylineController = getArcGISPolylineController(holder),
+            polygonController = getArcGISPolygonController(holder),
+            circleController = getArcGISCircleController(holder),
+            groundImageController = getArcGISGroundImageController(holder),
+            rasterLayerController = getArcGISRasterLayerController(holder),
+        )
+
+    registerMarkerRenderingSupport(
+        serviceRegistry = serviceRegistry,
+        createRenderer = { mapController.createMarkerRenderer() },
+        createEventController = { mapController.createMarkerEventController(it) },
+        registerEventController = { mapController.registerMarkerEventController(it) },
+        onRenderingReady = { mapController.sendInitialCameraUpdate() },
+    )
+
+    return mapController
+}
+
+/**
+ * 2D / 3D どちらのコントローラでも同じ形なので、`MarkerRenderingSupport` の登録はここに寄せる。
+ * 呼び忘れるとマーカーが黙って描かれなくなる（拡張側は registry を引けないと何もしない）。
+ */
+private fun registerMarkerRenderingSupport(
+    serviceRegistry: MutableMapServiceRegistry?,
+    createRenderer: () -> MarkerOverlayRendererInterface<ArcGISActualMarker>,
+    createEventController: (StrategyMarkerController<ArcGISActualMarker>) -> MarkerEventControllerInterface<ArcGISActualMarker>,
+    registerEventController: (MarkerEventControllerInterface<ArcGISActualMarker>) -> Unit,
+    onRenderingReady: () -> Unit,
+) {
+    val registry = serviceRegistry ?: return
+    registry.clear()
+    registry.put(
+        MarkerRenderingSupportKey,
+        object : MarkerRenderingSupport<ArcGISActualMarker> {
+            override fun createMarkerRenderer(
+                strategy: MarkerRenderingStrategyInterface<ArcGISActualMarker>,
+            ): MarkerOverlayRendererInterface<ArcGISActualMarker> = createRenderer()
+
+            override fun createMarkerEventController(
+                controller: StrategyMarkerController<ArcGISActualMarker>,
+                renderer: MarkerOverlayRendererInterface<ArcGISActualMarker>,
+            ): MarkerEventControllerInterface<ArcGISActualMarker> = createEventController(controller)
+
+            override fun registerMarkerEventController(controller: MarkerEventControllerInterface<ArcGISActualMarker>) {
+                registerEventController(controller)
+            }
+
+            override fun onMarkerRenderingReady() {
+                onRenderingReady()
+            }
+        },
+    )
+}
+
 private fun getArcGISCircleController(
-    holder: ArcGISMapView2DHolder,
+    holder: ArcGISGeoViewHolder<*, *>,
 ): ArcGISCircleOverlayController {
     val circleLayer = GraphicsOverlay()
     holder.geoView.graphicsOverlays.add(circleLayer)
@@ -172,7 +270,7 @@ private fun getArcGISCircleController(
 }
 
 private fun getArcGISPolylineController(
-    holder: ArcGISMapView2DHolder,
+    holder: ArcGISGeoViewHolder<*, *>,
 ): ArcGISPolylineOverlayController {
     val polylineLayer = GraphicsOverlay()
     holder.geoView.graphicsOverlays.add(polylineLayer)
@@ -182,7 +280,7 @@ private fun getArcGISPolylineController(
 }
 
 private fun getArcGISPolygonController(
-    holder: ArcGISMapView2DHolder,
+    holder: ArcGISGeoViewHolder<*, *>,
 ): ArcGISPolygonOverlayController {
     val polygonLayer = GraphicsOverlay()
     holder.geoView.graphicsOverlays.add(polygonLayer)
@@ -192,7 +290,7 @@ private fun getArcGISPolygonController(
 }
 
 private fun getArcGISMarkerController(
-    holder: ArcGISMapView2DHolder,
+    holder: ArcGISGeoViewHolder<*, *>,
     markerLayer: GraphicsOverlay,
     markerTiling: MarkerTilingOptions,
 ): ArcGISMarkerController {
@@ -202,12 +300,12 @@ private fun getArcGISMarkerController(
 }
 
 private fun getArcGISRasterLayerController(
-    holder: ArcGISMapView2DHolder,
+    holder: ArcGISGeoViewHolder<*, *>,
 ): ArcGISRasterLayerController =
     ArcGISRasterLayerController(renderer = ArcGISRasterLayerOverlayRenderer(holder = holder))
 
 private fun getArcGISGroundImageController(
-    holder: ArcGISMapView2DHolder,
+    holder: ArcGISGeoViewHolder<*, *>,
 ): ArcGISGroundImageController {
     val tileServer = TileServerRegistry.get()
     return ArcGISGroundImageController(

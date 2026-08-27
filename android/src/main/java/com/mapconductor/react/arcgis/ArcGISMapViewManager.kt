@@ -7,21 +7,19 @@ import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.ViewGroupManager
 import com.facebook.react.uimanager.annotations.ReactProp
 
-class ArcGISMapViewManager : ViewGroupManager<ArcGISMapViewWrapper>() {
-    override fun getName(): String = REACT_CLASS
-
-    override fun createViewInstance(reactContext: ThemedReactContext): ArcGISMapViewWrapper {
-        return ArcGISMapViewWrapper(reactContext)
-    }
-
-    override fun onAfterUpdateTransaction(view: ArcGISMapViewWrapper) {
+/**
+ * 2D / 3D で違うのはビュー名と作るラッパーだけなので、prop とコマンドの配線はここに置く。
+ * `@ReactProp` は親クラスの分も拾われる（ViewManagersPropertyCache が superclass を辿る）。
+ */
+abstract class ArcGISMapViewManagerBase : ViewGroupManager<ArcGISMapViewWrapperBase>() {
+    override fun onAfterUpdateTransaction(view: ArcGISMapViewWrapperBase) {
         super.onAfterUpdateTransaction(view)
         view.initializeMapIfNeeded()
     }
 
     @ReactProp(name = "apiKey")
     fun setApiKey(
-        view: ArcGISMapViewWrapper,
+        view: ArcGISMapViewWrapperBase,
         apiKey: String?,
     ) {
         view.setApiKey(apiKey)
@@ -29,7 +27,7 @@ class ArcGISMapViewManager : ViewGroupManager<ArcGISMapViewWrapper>() {
 
     @ReactProp(name = "cameraPosition")
     fun setCameraPosition(
-        view: ArcGISMapViewWrapper,
+        view: ArcGISMapViewWrapperBase,
         cameraPosition: ReadableMap?,
     ) {
         view.setCameraPosition(cameraPosition)
@@ -37,7 +35,7 @@ class ArcGISMapViewManager : ViewGroupManager<ArcGISMapViewWrapper>() {
 
     @ReactProp(name = "mapDesignType")
     fun setMapDesignType(
-        view: ArcGISMapViewWrapper,
+        view: ArcGISMapViewWrapperBase,
         mapDesignType: String?,
     ) {
         view.setMapDesignType(mapDesignType)
@@ -45,7 +43,7 @@ class ArcGISMapViewManager : ViewGroupManager<ArcGISMapViewWrapper>() {
 
     @ReactProp(name = "infoBubblePositions")
     fun setInfoBubblePositions(
-        view: ArcGISMapViewWrapper,
+        view: ArcGISMapViewWrapperBase,
         positions: ReadableArray?,
     ) {
         view.setInfoBubblePositions(positions)
@@ -53,14 +51,14 @@ class ArcGISMapViewManager : ViewGroupManager<ArcGISMapViewWrapper>() {
 
     @ReactProp(name = "markerTilingOptions")
     fun setMarkerTilingOptions(
-        view: ArcGISMapViewWrapper,
+        view: ArcGISMapViewWrapperBase,
         options: ReadableMap?,
     ) {
         view.setMarkerTilingOptions(options)
     }
 
     override fun receiveCommand(
-        root: ArcGISMapViewWrapper,
+        root: ArcGISMapViewWrapperBase,
         commandId: String,
         args: ReadableArray?,
     ) {
@@ -69,15 +67,35 @@ class ArcGISMapViewManager : ViewGroupManager<ArcGISMapViewWrapper>() {
         MapConductorMapViewCommands.receive(root, commandId, args)
     }
 
-    override fun onDropViewInstance(view: ArcGISMapViewWrapper) {
+    override fun onDropViewInstance(view: ArcGISMapViewWrapperBase) {
         view.onDropViewInstance()
         super.onDropViewInstance(view)
     }
 
     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any> =
         MapConductorMapViewCommands.directEventTypeConstants()
+}
+
+/** 3D（`SceneView`）。他プラットフォームと同じく無印が 3D。 */
+class ArcGISMapViewManager : ArcGISMapViewManagerBase() {
+    override fun getName(): String = REACT_CLASS
+
+    override fun createViewInstance(reactContext: ThemedReactContext): ArcGISMapViewWrapperBase =
+        ArcGISMapViewWrapper(reactContext)
 
     companion object {
         const val REACT_CLASS = "ArcGISMapView"
+    }
+}
+
+/** 2D（`MapView`）。 */
+class ArcGISMapView2DViewManager : ArcGISMapViewManagerBase() {
+    override fun getName(): String = REACT_CLASS
+
+    override fun createViewInstance(reactContext: ThemedReactContext): ArcGISMapViewWrapperBase =
+        ArcGISMapView2DWrapper(reactContext)
+
+    companion object {
+        const val REACT_CLASS = "ArcGISMapView2D"
     }
 }

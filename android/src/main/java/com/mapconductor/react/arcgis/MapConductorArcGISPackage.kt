@@ -9,5 +9,5 @@ class MapConductorArcGISPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> = emptyList()
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
-        listOf(ArcGISMapViewManager())
+        listOf(ArcGISMapViewManager(), ArcGISMapView2DViewManager())
 }
