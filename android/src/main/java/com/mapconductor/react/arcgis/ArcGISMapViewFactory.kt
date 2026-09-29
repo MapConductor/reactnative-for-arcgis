@@ -95,8 +95,7 @@ suspend fun createArcGISMapViewController(
     markerTiling: MarkerTilingOptions = MarkerTilingOptions.Default,
     serviceRegistry: MutableMapServiceRegistry? = null,
 ): ArcGISMapView2DController {
-    val basemapStyle = ArcGISDesign.toBasemapStyle(mapDesignType)
-    val map = ArcGISMap(basemapStyle)
+    val map = ArcGISDesign.toBasemapStyleOrNull(mapDesignType)?.let { ArcGISMap(it) } ?: ArcGISMap()
     wrapView.arcGISMapView.map = map
 
     val loadStatusScope = CoroutineScope(Dispatchers.Default)
@@ -165,10 +164,10 @@ suspend fun createArcGISSceneViewController(
 ): ArcGISMapViewController {
     val options =
         ArcGISMapViewInitOptions(
-            basemapStyle = ArcGISDesign.toBasemapStyle(mapDesignType),
+            basemapStyle = ArcGISDesign.toBasemapStyleOrNull(mapDesignType),
             elevationSources = mapDesignType.elevationSources,
         )
-    val scene = ArcGISScene(options.basemapStyle)
+    val scene = options.basemapStyle?.let { ArcGISScene(it) } ?: ArcGISScene()
     options.elevationSources.forEach { scene.baseSurface.elevationSources.add(ArcGISTiledElevationSource(it)) }
     wrapView.sceneView.scene = scene
 
