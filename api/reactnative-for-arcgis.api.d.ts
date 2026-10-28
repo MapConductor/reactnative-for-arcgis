@@ -53,4 +53,5 @@ declare function ArcGISMapView(props: ArcGISMapViewProps): React.JSX.Element;
  */
 declare function ArcGISMapView2D(props: ArcGISMapViewProps): React.JSX.Element;
 
-export { type ArcGISMapMap, type ArcGISMapMapView, ArcGISMapView, ArcGISMapView2D, ArcGISMapViewController, type ArcGISMapViewControllerInterface, ArcGISMapViewHolder, type ArcGISMapViewProps, type ArcGISMapViewRef, type NativeArcGISMapViewEvent, type NativeArcGISMapViewProps };
+export { ArcGISMapView, ArcGISMapView2D, ArcGISMapViewController, ArcGISMapViewHolder };
+export type { ArcGISMapMap, ArcGISMapMapView, ArcGISMapViewControllerInterface, ArcGISMapViewProps, ArcGISMapViewRef, NativeArcGISMapViewEvent, NativeArcGISMapViewProps };
