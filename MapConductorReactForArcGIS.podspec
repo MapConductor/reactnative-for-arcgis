@@ -24,5 +24,5 @@ Pod::Spec.new do |s|
   s.dependency "React-Core"
   s.dependency "MapConductorReactNativeCore"
   s.dependency "MapConductorReactMarkerClustering"
-  s.dependency "MapConductorForArcGIS", "~> 1.3.0"
+  s.dependency "MapConductorForArcGIS", "~> 1.4"
 end
